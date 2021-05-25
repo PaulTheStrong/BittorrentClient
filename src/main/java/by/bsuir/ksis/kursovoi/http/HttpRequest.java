@@ -46,7 +46,7 @@ public class HttpRequest {
 
     private String getParamString(Map<String, String> parameters) {
         String paramString = "";
-        for (var param : parameters.entrySet()) {
+        for (Map.Entry<String, String> param : parameters.entrySet()) {
             paramString += param.getKey() + "=" + param.getValue() + "&";
         }
         paramString = paramString.substring(0, paramString.length() - 1);

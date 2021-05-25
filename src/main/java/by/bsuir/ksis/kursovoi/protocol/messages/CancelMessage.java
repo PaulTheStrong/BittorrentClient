@@ -58,4 +58,9 @@ public class CancelMessage extends PeerMessage {
                 ", length=" + length +
                 '}';
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.CANCEL;
+    }
 }

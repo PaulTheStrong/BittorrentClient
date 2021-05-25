@@ -1,17 +1,22 @@
 package by.bsuir.ksis.kursovoi.client;
 
 import by.bsuir.ksis.kursovoi.Utils;
+import by.bsuir.ksis.kursovoi.data.Bitfield;
 import by.bsuir.ksis.kursovoi.data.Block;
 import by.bsuir.ksis.kursovoi.data.Piece;
 import by.bsuir.ksis.kursovoi.data.TorrentMetaInfo;
+import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
+import javafx.collections.ObservableList;
 import lombok.SneakyThrows;
 import org.apache.log4j.Logger;
 
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 
 /**
  *  The PieceManager is responsible for keeping track of
@@ -23,65 +28,101 @@ import java.util.stream.IntStream;
  */
 public class PieceManager implements AutoCloseable {
 
-    private static final int MAX_PENDING_TIME = 300;
+    private static final long MAX_PENDING_TIME = 300 * 1000;
     private static final Logger LOGGER = Logger.getRootLogger();
 
-    private TorrentMetaInfo torrent;
-    private List<Block> pendingBlocks = new ArrayList<>();
-    private List<Piece> missingPieces;
-    private List<Piece> ongoingPieces = new ArrayList<>();
-    private List<Piece> havePieces = new ArrayList<>();
+    private final TorrentMetaInfo torrent;
+    private final PieceWriter pieceWriter;
 
-    private long totalPieces;
-    private FileOutputStream fileOutputStream;
+    private final ObservableList<Block> pendingBlocks = FXCollections.observableArrayList();
+    private final ObservableList<Piece> missingPieces = FXCollections.observableArrayList();
+    private final ObservableList<Piece> ongoingPieces = FXCollections.observableArrayList();
 
-    /** TODO not sure if its String - Integer */
-    private Map<String, Map<String, Object>> peers = new HashMap<>();
+    private final ObservableList<Piece> havePieces = FXCollections.observableArrayList();
 
-    private static final long REQUEST_SIZE = (long) Math.pow(2, 14);
+    private final int totalPieces;
+
+    private final Map<String, Bitfield> peersBitfields = new HashMap<>();
+
+    private static final int REQUEST_SIZE = 1 << 14;
 
     @SneakyThrows
     public PieceManager(TorrentMetaInfo torrent) {
         this.torrent = torrent;
         this.totalPieces = torrent.getPieceHashes().length;
-        this.missingPieces = initiatePieces();
-        fileOutputStream = new FileOutputStream(torrent.getName());
+        pieceWriter = new PieceWriter(torrent.getName(), torrent, this);
     }
 
-    private List<Piece> initiatePieces() {
 
-        List<Piece> pieces = new ArrayList<>();
-        long pieceBlocks = (torrent.getPieceLength() + REQUEST_SIZE - 1) / REQUEST_SIZE;
-        IntStream.range(0, (int) totalPieces - 1).forEach(index -> {
+    private void checkDownloadedPieces() throws IOException {
+        File file = new File("H:/downloads/" + torrent.getName());
+        if (!file.exists()) {
+            LOGGER.info("FILE DOESNT EXIST");
+            return;
+        }
+        FileInputStream fileInputStream = new FileInputStream(file);
+        //file.setLength(torrent.getTotalSize());
+
+        byte[][] pieceHashes = torrent.getPieceHashes();
+        int totalPieces = pieceHashes.length;
+        int READ_PIECES = 32;
+        int pieceLength = torrent.getPieceLength();
+
+        byte[] buffer = new byte[pieceLength * READ_PIECES];
+        int read;
+        int currentPieceIndex = 0;
+        while((read = fileInputStream.read(buffer)) != -1) {
+            LOGGER.info("READ " + read + " bytes");
+            for (int i = 0; i < read; i += pieceLength) {
+                int currentPieceLength = currentPieceIndex != pieceHashes.length - 1 ? pieceLength : (int) (torrent.getTotalSize() % pieceLength);
+                byte[] data = new byte[currentPieceLength];
+                System.arraycopy(buffer, i, data, 0, currentPieceLength);
+                String shaSum = Utils.SHAsum(data);
+                if (shaSum.equals(Utils.byteArray2Hex(pieceHashes[currentPieceIndex]))) {
+                    int finalCurrentPieceIndex = currentPieceIndex;
+                    Piece havePiece = missingPieces.stream().filter(piece -> finalCurrentPieceIndex == piece.getIndex()).findFirst().get();
+                    missingPieces.remove(havePiece);
+                    havePieces.add(havePiece);
+                }
+                currentPieceIndex++;
+            }
+        }
+        fileInputStream.close();
+    }
+
+    private void initiatePieces() {
+        int stdPieceBlocks = (torrent.getPieceLength() + REQUEST_SIZE - 1) / REQUEST_SIZE;
+        for (int i = 0; i < totalPieces; i++) {
             List<Block> blocks = new ArrayList<>();
-            IntStream.range(0, (int) pieceBlocks)
-                    .forEach(offset -> blocks.add(
-                    new Block(index,
-                            offset * REQUEST_SIZE,
-                            REQUEST_SIZE)));
-            byte[] pieceHash = torrent.getPieceHashes()[index];
-            String hash = Utils.byteArray2Hex(pieceHash);
-            pieces.add(new Piece(index, blocks, hash));
-        });
-        long lastLength = torrent.getTotalSize() % torrent.getPieceLength();
-        int blockCount = (int) ((lastLength + REQUEST_SIZE - 1) / REQUEST_SIZE);
-        List<Block> blocks = new ArrayList<>();
-        IntStream.range(0, blockCount - 1)
-                .forEach(offset -> blocks.add(
-                        new Block(totalPieces - 1,
-                                offset * REQUEST_SIZE,
-                                REQUEST_SIZE)));
-        blocks.add(new Block(totalPieces - 1, (totalPieces - 1) * REQUEST_SIZE, lastLength % REQUEST_SIZE));
-        byte[] pieceHash = torrent.getPieceHashes()[(int) (totalPieces - 1)];
-        String hash = Utils.byteArray2Hex(pieceHash);
-        pieces.add(new Piece(totalPieces - 1, blocks, hash));
-        return pieces;
+            if (i < totalPieces - 1) {
+                for (int j = 0; j < stdPieceBlocks; j++) {
+                    blocks.add(new Block(i, j * REQUEST_SIZE, REQUEST_SIZE));
+                }
+            } else {
+                long lastLength = torrent.getTotalSize() % torrent.getPieceLength();
+                int numBlocks = (int) ((lastLength + REQUEST_SIZE - 1) / REQUEST_SIZE);
+                for (int j = 0; j < numBlocks; j++) {
+                    blocks.add(new Block(i, j * REQUEST_SIZE, REQUEST_SIZE));
+                }
+                if (lastLength % REQUEST_SIZE > 0) {
+                    blocks.get(blocks.size() - 1).setLength((int) (lastLength % REQUEST_SIZE));
+                }
+            }
+            missingPieces.add(new Piece(i, blocks, Utils.byteArray2Hex(torrent.getPieceHashes()[i])));
+        }
+    }
+
+    @SneakyThrows
+    public void init() {
+        initiatePieces();
+        checkDownloadedPieces();
+        new Thread(pieceWriter).start();
     }
 
     /** Closes the connection to a referred file. */
     @Override
-    public void close() throws Exception {
-        fileOutputStream.close();
+    public synchronized void close() throws Exception {
+        pieceWriter.setComplete(true);
     }
 
     /**
@@ -99,46 +140,55 @@ public class PieceManager implements AutoCloseable {
      * not single blocks.
      */
     public long getBytesDownloaded() {
-        return havePieces.size() * torrent.getPieceLength();
+        int pieceLength = torrent.getPieceLength();
+        long downloaded = (long) havePieces.size() * pieceLength;
+        boolean present = havePieces.stream().anyMatch(piece -> piece.getIndex() == totalPieces - 1);
+        if (present) {
+            downloaded -= pieceLength;
+            downloaded += torrent.getTotalSize() % pieceLength;
+        }
+        return downloaded;
     }
 
     /** TODO Get the number of bytes uploaded */
     public long getBytesUploaded() {
-        throw new UnsupportedOperationException();
+        return 0;
+        //throw new UnsupportedOperationException();
     }
 
-    /** Add a peer and the bitfield representing the
+    /**
+     * Add a peer and the bitfield representing the
      * pieces the peer has.
      */
-    public void addPeer(String peerId, Integer bitfield) {
-        peers.get(peerId).put(peerId, bitfield);
+    public void addPeer(String peerId, byte[] bitfield) {
+        peersBitfields.put(peerId, new Bitfield(bitfield));
     }
 
     /** Update the information about which pieces a peer has
      * (reflects a Have message)
      */
-    public void updatePeer(String peerId) {
-        if (peers.containsKey(peerId)) {
-            peers.get(peerId).put("index", 1);
+    public void updatePeer(String peerId, int index) {
+        if (peersBitfields.containsKey(peerId)) {
+            peersBitfields.get(peerId).setPiece(index, true);
         }
     }
 
     /** Removes a previously added peer (e.g used if a peer
      * connection is dropped
      */
-    public void removePeer(String peerId) {
-        peers.remove(peerId);
+    public synchronized void removePeer(String peerId) {
+        peersBitfields.remove(peerId);
     }
 
     /**
-     * TODO Get the next Bock that should be requested from the
+     * Get the next Bock that should be requested from the
      * giver peer.
      *
      * If there are no more blocks left to retreive or if
      * this peer does not have any of the missing pieces
      * return Optional.empty().
      *
-     * TODO write algo explanation.
+     *
 
     # The algorithm implemented for which piece to retrieve is a simple
     # one. This should preferably be TODO <b>replaced</b> with an
@@ -152,22 +202,27 @@ public class PieceManager implements AutoCloseable {
     # 2. Check the ongoing pieces to get the next block to request
     # 3. Check if this peer have any of the missing pieces not yet started
      */
-    public Optional<Block> nextRequest(String peerId) {
-        if (!peers.containsKey(peerId)) {
+    public synchronized Optional<Block> nextRequest(String peerId) {
+        if (!peersBitfields.containsKey(peerId)) {
             return Optional.empty();
         }
         Optional<Block> block = expiredRequests(peerId);
-        if (block.isEmpty()) {
+        if (!block.isPresent()) {
             block = nextOngoing(peerId);
-            if (block.isEmpty()) {
-                block = getRarestPiece(peerId).nextRequest();
+            if (!block.isPresent()) {
+                Optional<Piece> rarestPiece = getRarestPiece(peerId);
+                if (rarestPiece.isPresent()) {
+                    block = rarestPiece.get().nextRequest();
+                } else {
+                    block = nextMissing(peerId);
+                }
             }
         }
         return block;
     }
 
     /**
-     * TODO This method must be called when a block has
+     * This method must be called when a block has
      * successfully been retrieved by a peer.
      *
      * Once a full piece have been retrieved, a SHA1 hash
@@ -176,7 +231,8 @@ public class PieceManager implements AutoCloseable {
      * again. If the hash succeeds the partial piece is
      * written to disk and the piece is indicated as Have.
      */
-    public void blockReceived(String peerId, long pieceIndex, long blockOffset, byte[] data) {
+    @SneakyThrows
+    public synchronized void blockReceived(String peerId, long pieceIndex, long blockOffset, byte[] data) throws IOException {
         LOGGER.debug("Received block " + blockOffset + " for piece " + pieceIndex
                     + " from peer " + peerId);
         for (int index = 0; index < pendingBlocks.size(); index++) {
@@ -191,15 +247,21 @@ public class PieceManager implements AutoCloseable {
                 .findFirst();
         if (pieceOpt.isPresent()) {
             Piece piece = pieceOpt.get();
-            if (piece.isHashMatching()) {
-                write(piece);
-                ongoingPieces.remove(piece);
-                havePieces.add(piece);
-                long complete = totalPieces - missingPieces.size() - ongoingPieces.size();
-                LOGGER.info(complete + " / " + totalPieces + " pieces downloaded");
-            } else {
-                LOGGER.info("Discarding corrupt piece #" + piece.getIndex());
-                piece.reset();
+            piece.blockReceived(blockOffset, data);
+            if (piece.isComplete()) {
+                if (piece.isHashMatching()) {
+                    havePieces.add(piece);
+                    ongoingPieces.remove(piece);
+                    if (isComplete()) {
+                        close();
+                    }
+                    pieceWriter.addPiece(piece);
+                    long complete = havePieces.size();
+                    LOGGER.info(complete + " / " + totalPieces + " pieces downloaded");
+                } else {
+                    LOGGER.info("Discarding corrupt piece #" + piece.getIndex());
+                    piece.reset();
+                }
             }
         }
     }
@@ -210,15 +272,20 @@ public class PieceManager implements AutoCloseable {
      * `MAX_PENDING_TIME` return the block to be re-requested.
      * If no pending blocks exist, Optional.empty() is returned
      */
-    public Optional<Block> expiredRequests(String peerId) {
-/*
-        long current = System.currentTimeMillis() / 1000;
+    public synchronized Optional<Block> expiredRequests(String peerId) {
+
+        long current = System.currentTimeMillis();
         for (Block request : pendingBlocks) {
-            if (peers.get(peerId).containsKey(request.getPiece())) {
+            int pieceNumber = request.getPiece();
+            Bitfield currentBitfield = peersBitfields.get(peerId);
+            if (currentBitfield != null && currentBitfield.hasPiece(pieceNumber)) {
+                if (request.getAddedTime() + MAX_PENDING_TIME < current) {
+                    LOGGER.info("Re-requesting block " + request.getOffset() + " for piece " + request.getPiece());
+                    request.setAddedTime(current);
+                    return Optional.of(request);
+                }
             }
-        }
-*/
-        throw new UnsupportedOperationException();
+        } return Optional.empty();
     }
 
     /**
@@ -226,8 +293,19 @@ public class PieceManager implements AutoCloseable {
      * block to be requested or Optioanl.empty() if no
      * block is left to be requested.
      */
-    public Optional<Block> nextOngoing(String peerId) {
-        throw new UnsupportedOperationException();
+    public synchronized Optional<Block> nextOngoing(String peerId) {
+        for (Piece piece : ongoingPieces) {
+            int pieceNumber = piece.getIndex();
+            Bitfield currentBitfield = peersBitfields.get(peerId);
+            if (currentBitfield != null && currentBitfield.hasPiece(pieceNumber)) {
+                Optional<Block> block = piece.nextRequest();
+                if (block.isPresent()) {
+                    pendingBlocks.add(block.get());
+                    return block;
+                }
+            }
+        }
+        return Optional.empty();
     }
 
     /**
@@ -235,22 +313,32 @@ public class PieceManager implements AutoCloseable {
      * rarest one first (i.e. a piece which fewest of its
      * neighboring peers have)
      */
-    public Piece getRarestPiece(String peerId) {
-        Map<String, Integer> pieceCount = new HashMap<>();
+    public synchronized Optional<Piece> getRarestPiece(String peerId) {
+        Map<Piece, Integer> pieceCount = new HashMap<>();
+
         for (Piece piece : missingPieces) {
-            if (peers.get(peerId).containsKey(piece.getIndex())) {
-                for (String p : peers.keySet()) {
-                    if (peers.get(p).containsKey(piece.getIndex())) {
-                        pieceCount.computeIfPresent(p, (k, v) -> v + 1);
-                        pieceCount.putIfAbsent(p, 1);
+            Bitfield bitfield = peersBitfields.get(peerId);
+            if (bitfield.hasPiece(piece.getIndex())) {
+                for (Map.Entry<String, Bitfield> p : peersBitfields.entrySet()) {
+                    Bitfield bitfieldOther = peersBitfields.get(p.getKey());
+                    if (bitfieldOther.hasPiece(piece.getIndex())) {
+                        pieceCount.computeIfPresent(piece, (k, v) -> v + 1);
+                        pieceCount.putIfAbsent(piece, 1);
                     }
                 }
             }
         }
-        Integer rarestPieceIndex = Collections.min(pieceCount.values());
-        //Piece rarestPiece = missingPieces.remove(rarestPiece);
-        //ongoingPieces.add();
-        throw new UnsupportedOperationException();
+
+        if (pieceCount.isEmpty()) {
+            return Optional.empty();
+        }
+        Piece rarestPiece = Collections
+                .min(pieceCount.entrySet(),
+                        Comparator.comparingInt(Map.Entry::getValue))
+                .getKey();
+        missingPieces.remove(rarestPiece);
+        ongoingPieces.add(rarestPiece);
+        return Optional.of(rarestPiece);
     }
 
     /**
@@ -263,12 +351,35 @@ public class PieceManager implements AutoCloseable {
      * continue with the blocks for that piece, rather get
      * the next missing piece.
      */
-    public Optional<Block> nextMissing(String peerId) {
-        throw new UnsupportedOperationException();
+    public synchronized Optional<Block> nextMissing(String peerId) {
+        for (Piece piece : missingPieces) {
+            Bitfield bitfield = peersBitfields.get(peerId);
+            if (bitfield.hasPiece(piece.getIndex())) {
+                missingPieces.remove(piece);
+                ongoingPieces.add(piece);
+                return piece.nextRequest();
+            }
+        }
+        return Optional.empty();
     }
 
-    /** Write a given piece to disk */
-    public void write(Piece piece) {
-        throw new UnsupportedOperationException();
+    public int getPendingBlocksSize() {
+        return pendingBlocks.size();
+    }
+
+    public void addMissingPiecesListListener(ListChangeListener<Piece> pieceListChangeListener) {
+         missingPieces.addListener(pieceListChangeListener);
+    }
+
+    public void addHavePiecesListListener(ListChangeListener<Piece> pieceListChangeListener) {
+        havePieces.addListener(pieceListChangeListener);
+    }
+
+    public void addOngoingPiecesListListener(ListChangeListener<Piece> pieceListChangeListener) {
+        ongoingPieces.addListener(pieceListChangeListener);
+    }
+
+    public void addPendingBlockListListener(ListChangeListener<Block> pieceListChangeListener) {
+        pendingBlocks.addListener(pieceListChangeListener);
     }
 }

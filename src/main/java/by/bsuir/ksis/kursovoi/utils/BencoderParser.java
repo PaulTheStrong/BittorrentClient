@@ -7,10 +7,7 @@ import by.bsuir.ksis.kursovoi.protocol.Peer;
 import com.github.cdefgah.bencoder4j.BencodeFormatException;
 import com.github.cdefgah.bencoder4j.CircularReferenceException;
 import com.github.cdefgah.bencoder4j.io.BencodeStreamIterator;
-import com.github.cdefgah.bencoder4j.model.BencodedByteSequence;
-import com.github.cdefgah.bencoder4j.model.BencodedDictionary;
-import com.github.cdefgah.bencoder4j.model.BencodedInteger;
-import com.github.cdefgah.bencoder4j.model.BencodedList;
+import com.github.cdefgah.bencoder4j.model.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
@@ -41,7 +38,15 @@ public class BencoderParser {
         BencodedDictionary dictionary = (BencodedDictionary) bencodeStreamIterator.next();
 
         String announce = bencodedByteSequenceToString((BencodedByteSequence) dictionary.get(ANNOUNCE));
-        List<FileDescription> descriptions = new ArrayList<>();
+
+        List<String> announceList = new ArrayList<>();
+        announceList.add(announce);
+        if (dictionary.containsKey("announce-list")) {
+            BencodedList bencodedObjects = (BencodedList) dictionary.get("announce-list");
+            for (BencodedObject bencodedAnnounce : bencodedObjects) {
+                announceList.add(bencodedByteSequenceToString((BencodedByteSequence) ((BencodedList) bencodedAnnounce).get(0)));
+            }
+        }
 
         BencodedDictionary info = (BencodedDictionary) dictionary.get(INFO);
 
@@ -63,10 +68,12 @@ public class BencoderParser {
             e.printStackTrace();
         }
 
+
         String infoHash = SHAsum(os.toByteArray());
 
         System.out.println(infoHash);
 
+        List<FileDescription> descriptions = new ArrayList<>();
         if (info.containsKey(FILES)) {
             BencodedList files = (BencodedList) info.get(FILES);
             for (int i = 0; i < files.size(); i++) {
@@ -84,7 +91,7 @@ public class BencoderParser {
             descriptions.add(new FileDescription(name, fileLength));
         }
 
-        return new TorrentMetaInfo(announce, name, descriptions, pieces, pieceLength, infoHash);
+        return new TorrentMetaInfo(announce, announceList, name, descriptions, pieces, (int) pieceLength, infoHash);
     }
 
     public TrackerResponse parseTrackerResponse(String response) throws IOException, BencodeFormatException {

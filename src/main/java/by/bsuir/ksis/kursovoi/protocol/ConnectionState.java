@@ -1,5 +1,5 @@
 package by.bsuir.ksis.kursovoi.protocol;
 
 public enum ConnectionState {
-    STOPPED
+    STOPPED, CHOKED, INTERESTED, PENDING_REQUEST
 }

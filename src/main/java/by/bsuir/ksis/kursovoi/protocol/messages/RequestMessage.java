@@ -34,7 +34,7 @@ public class RequestMessage extends PeerMessage {
 
     @Override
     public byte[] encode() {
-        byte[] result = new byte[4 + 1 + LENGTH];
+        byte[] result = new byte[4 + LENGTH];
         result[3] = LENGTH;
         result[4] = (byte) MessageType.REQUEST.ordinal();
         ByteBuffer.wrap(result, 5, 4).putInt(index);
@@ -70,5 +70,10 @@ public class RequestMessage extends PeerMessage {
                 ", begin=" + begin +
                 ", length=" + length +
                 '}';
+    }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.REQUEST;
     }
 }

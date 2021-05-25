@@ -26,4 +26,9 @@ public class ChokeMessage extends PeerMessage {
     public String toString() {
         return "ChokeMessage{}";
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.CHOKE;
+    }
 }

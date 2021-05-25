@@ -30,4 +30,5 @@ public enum MessageType {
         Method decode = messageClass.getMethod("decode", byte[].class);
         return (PeerMessage) decode.invoke(null, data);
     }
+
 }

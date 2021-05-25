@@ -18,4 +18,9 @@ public class KeepAliveMessage extends PeerMessage {
     public String toString() {
         return "KeepAliveMessage{}";
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.KEEPALIVE;
+    }
 }

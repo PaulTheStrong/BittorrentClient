@@ -25,10 +25,15 @@ public class PeerInputStream extends InputStream {
         return messageStream.read();
     }
 
-    public PeerMessage readNextMessage() throws IOException, InterruptedException {
+    public PeerMessage readNextMessage() throws IOException, InterruptedException, ProtocolException {
         int size = dataInputStream.readInt();
+        int counter = 0;
         while (messageStream.available() < size) {
             TimeUnit.MILLISECONDS.sleep(100);
+            //counter++;
+            //if (counter == 100) {
+            //    throw new ProtocolException("No data!");
+            //}
         }
         byte[] data = new byte[size];
         int read = messageStream.read(data, 0, size);

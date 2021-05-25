@@ -27,4 +27,9 @@ public class InterestedMessage extends PeerMessage {
     public String toString() {
         return "InterestedMessage{}";
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.INTERESTED;
+    }
 }

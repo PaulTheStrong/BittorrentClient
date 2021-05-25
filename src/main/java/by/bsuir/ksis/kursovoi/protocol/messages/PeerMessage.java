@@ -24,4 +24,6 @@ public abstract class PeerMessage {
      */
     public abstract byte[] encode();
 
+    public abstract MessageType getType();
+
 }

@@ -19,7 +19,6 @@ public class Tracker {
 
     private static final BencoderParser parser = new BencoderParser();
 
-
     private final TorrentMetaInfo torrent;
 
     public Tracker(TorrentMetaInfo torrent) {
@@ -28,12 +27,12 @@ public class Tracker {
 
     public TrackerResponse connect(boolean isFirst, long uploaded, long downloaded) throws IOException, BencodeFormatException {
         List<FileDescription> pieces = torrent.getFiles();
-        String announceName = torrent.getAnnounce();
+        String announceName = torrent.getAnnounceList().stream().filter(address -> address.startsWith("http://")).findFirst().get();
 
         String infoHash = torrent.getInfoHash();
         String peerId = torrent.getPeerId();
         int port = 6881;
-        Long left = pieces.stream().map(FileDescription::getLength).reduce(Long::sum).get() - downloaded;
+        long left = pieces.stream().map(FileDescription::getLength).reduce(Long::sum).get() - downloaded;
         int compact = 1;
 
         String requestString = announceName.substring(announceName.lastIndexOf('/')) +
@@ -48,12 +47,14 @@ public class Tracker {
             requestString += "&event=started";
         }
 
-        String announce = torrent.getAnnounce();
-        String announceHost = announce.substring(announce.indexOf("//") + 2, announce.lastIndexOf("/"));
-
+        String announceHost = announceName.substring(7, announceName.lastIndexOf("/"));
         HttpRequest request = new HttpRequest(announceHost, 80);
         HttpResponse responseString = request.get(requestString);
 
         return parser.parseTrackerResponse(responseString.getContent().trim());
+    }
+
+    public TorrentMetaInfo getTorrent() {
+        return torrent;
     }
 }

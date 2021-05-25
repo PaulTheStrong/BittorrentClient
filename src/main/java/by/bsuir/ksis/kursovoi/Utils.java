@@ -1,5 +1,6 @@
 package by.bsuir.ksis.kursovoi;
 
+import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.security.MessageDigest;
@@ -10,7 +11,8 @@ import java.util.List;
 
 public class Utils {
 
-    public static String SHAsum(byte[] convertme) throws NoSuchAlgorithmException {
+    @SneakyThrows
+    public static String SHAsum(byte[] convertme) {
         MessageDigest md = MessageDigest.getInstance("SHA-1");
         return byteArray2Hex(md.digest(convertme));
     }

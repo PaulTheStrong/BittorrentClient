@@ -35,6 +35,10 @@ public class HaveMessage extends PeerMessage {
         return new HaveMessage(index);
     }
 
+    public int getIndex() {
+        return index;
+    }
+
     @Override
     public String toString() {
         return "HaveMessage{" +
@@ -42,5 +46,9 @@ public class HaveMessage extends PeerMessage {
                 '}';
     }
 
+    @Override
+    public MessageType getType() {
+        return MessageType.HAVE;
+    }
 
 }

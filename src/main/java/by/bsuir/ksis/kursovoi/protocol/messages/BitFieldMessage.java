@@ -44,4 +44,9 @@ public class BitFieldMessage extends PeerMessage {
                 "bitField=" + Arrays.toString(bitField) +
                 '}';
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.BITFIELD;
+    }
 }

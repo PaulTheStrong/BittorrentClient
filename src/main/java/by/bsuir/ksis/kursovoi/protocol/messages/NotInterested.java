@@ -27,4 +27,9 @@ public class NotInterested extends PeerMessage {
     public String toString() {
         return "NotInterested{}";
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.NOT_INTERESTED;
+    }
 }

@@ -12,12 +12,17 @@ public class UnchokeMessage extends PeerMessage {
         return result;
     }
 
-    public UnchokeMessage decode(byte[] data) {
+    public static UnchokeMessage decode(byte[] data) {
         return new UnchokeMessage();
     }
 
     @Override
     public String toString() {
         return "UnchokeMessage{}";
+    }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.UNCHOKE;
     }
 }

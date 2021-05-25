@@ -51,12 +51,12 @@ public class HandshakeMessage extends PeerMessage {
      * if not a valid message, Optional.empty() is returned.
      */
     public static HandshakeMessage decode(byte[] data) {
-        LOGGER.debug("Decoding Handshake if length" + data.length);
+        LOGGER.debug("Decoding Handshake of length " + data.length);
         byte[] infoHash = new byte[20];
         byte[] peerId = new byte[20];
 
-        System.arraycopy(data, 20, infoHash, 0, 20);
-        System.arraycopy(data, 40, peerId, 0, 20);
+        System.arraycopy(data, 28, infoHash, 0, 20);
+        System.arraycopy(data, 48, peerId, 0, 20);
 
         return new HandshakeMessage(infoHash, peerId);
     }
@@ -75,5 +75,10 @@ public class HandshakeMessage extends PeerMessage {
                 "infoHash=" + Utils.byteArray2Hex(infoHash) +
                 ", peerId=" + Utils.byteArray2Hex(peerId) +
                 '}';
+    }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.HANDSHAKE;
     }
 }

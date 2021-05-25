@@ -72,4 +72,9 @@ public class PieceMessage extends PeerMessage {
                 ", data=" + Arrays.toString(data) +
                 '}';
     }
+
+    @Override
+    public MessageType getType() {
+        return MessageType.PIECE;
+    }
 }
