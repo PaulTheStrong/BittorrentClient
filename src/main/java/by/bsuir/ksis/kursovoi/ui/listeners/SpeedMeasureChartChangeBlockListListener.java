@@ -11,7 +11,7 @@ import org.apache.log4j.Logger;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
-public class SpeedMeasureChangeBlockListListener implements ListChangeListener<Block> {
+public class SpeedMeasureChartChangeBlockListListener implements ListChangeListener<Block> {
 
     private static final Logger LOGGER = Logger.getRootLogger();
 
@@ -20,7 +20,7 @@ public class SpeedMeasureChangeBlockListListener implements ListChangeListener<B
     private final long start = System.currentTimeMillis();
     private long lastMeasured = 0;
 
-    public SpeedMeasureChangeBlockListListener(XYChart.Series<Number, Number> series, int seconds) {
+    public SpeedMeasureChartChangeBlockListListener(XYChart.Series<Number, Number> series, int seconds) {
         this.series = series;
         this.values = new int[seconds];
     }

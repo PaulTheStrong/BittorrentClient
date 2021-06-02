@@ -33,7 +33,7 @@ public class PieceWriter implements Runnable {
         fileOutputStream.close();
     }
 
-    public void addPiece(Piece piece) throws InterruptedException {
+    public synchronized void addPiece(Piece piece) throws InterruptedException {
         piecesToWrite.put(piece);
     }
 

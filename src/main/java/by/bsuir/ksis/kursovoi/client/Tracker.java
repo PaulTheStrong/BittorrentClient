@@ -25,7 +25,7 @@ public class Tracker {
         this.torrent = torrent;
     }
 
-    public TrackerResponse connect(boolean isFirst, long uploaded, long downloaded) throws IOException, BencodeFormatException {
+    public TrackerResponse connect(String status, long uploaded, long downloaded) throws IOException, BencodeFormatException {
         List<FileDescription> pieces = torrent.getFiles();
         String announceName = torrent.getAnnounceList().stream().filter(address -> address.startsWith("http://")).findFirst().get();
 
@@ -43,9 +43,7 @@ public class Tracker {
                 "&downloaded=" + downloaded +
                 "&left=" + left +
                 "&compact=" + compact;
-        if (isFirst) {
-            requestString += "&event=started";
-        }
+            requestString += "&event=" + status;
 
         String announceHost = announceName.substring(7, announceName.lastIndexOf("/"));
         HttpRequest request = new HttpRequest(announceHost, 80);

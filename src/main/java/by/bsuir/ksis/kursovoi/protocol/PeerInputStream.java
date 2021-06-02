@@ -29,11 +29,7 @@ public class PeerInputStream extends InputStream {
         int size = dataInputStream.readInt();
         int counter = 0;
         while (messageStream.available() < size) {
-            TimeUnit.MILLISECONDS.sleep(100);
-            //counter++;
-            //if (counter == 100) {
-            //    throw new ProtocolException("No data!");
-            //}
+            Thread.yield();
         }
         byte[] data = new byte[size];
         int read = messageStream.read(data, 0, size);

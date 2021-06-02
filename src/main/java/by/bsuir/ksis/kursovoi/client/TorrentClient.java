@@ -2,6 +2,7 @@ package by.bsuir.ksis.kursovoi.client;
 
 import by.bsuir.ksis.kursovoi.client.callbacks.OnBlockRetrievedCallBackFunction;
 import by.bsuir.ksis.kursovoi.data.TorrentMetaInfo;
+import by.bsuir.ksis.kursovoi.data.TorrentStatus;
 import by.bsuir.ksis.kursovoi.data.TrackerResponse;
 import by.bsuir.ksis.kursovoi.protocol.Peer;
 import by.bsuir.ksis.kursovoi.protocol.PeerConnection;
@@ -31,7 +32,7 @@ public class TorrentClient {
 
     private static final Logger LOGGER = Logger.getRootLogger();
 
-    private static final int MAX_PEER_CONNECTIONS = 30;
+    private static final int MAX_PEER_CONNECTIONS = 50;
 
     private final Tracker tracker;
 
@@ -52,6 +53,7 @@ public class TorrentClient {
      * to disk. */
     private final PieceManager pieceManager;
     private boolean abort;
+    public final ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(MAX_PEER_CONNECTIONS);
 
     public TorrentClient(TorrentMetaInfo torrent) {
         this.peers = new ArrayList<>();
@@ -73,12 +75,11 @@ public class TorrentClient {
     @SneakyThrows
     public void start() {
         pieceManager.init();
-        ExecutorService exec = Executors.newFixedThreadPool(MAX_PEER_CONNECTIONS);
         for (int i = 0; i < MAX_PEER_CONNECTIONS; i++) {
             TorrentMetaInfo torrent = tracker.getTorrent();
             PeerConnection peerConnection = new PeerConnection(availablePeers, torrent.getInfoHash(), torrent.getPeerId(), pieceManager, new OnBlockRetrievedCallBackFunction(this));
             peers.add(peerConnection);
-            exec.submit(peerConnection::start);
+            EXECUTOR_SERVICE.submit(peerConnection::start);
         }
 
         long previous = 0;
@@ -87,12 +88,14 @@ public class TorrentClient {
             if (pieceManager.isComplete()) {
                 FileSplitter fileSplitter = new FileSplitter(tracker.getTorrent(), tracker.getTorrent().getName());
                 fileSplitter.splitIntoFiles();
-                tracker.connect(false, 0, pieceManager.getBytesDownloaded());
+                tracker.connect("completed", 0, pieceManager.getBytesDownloaded());
                 LOGGER.info("Torrent has been downloaded!");
-                exec.shutdownNow();
+                EXECUTOR_SERVICE.shutdownNow();
+                tracker.getTorrent().setTorrentStatus(TorrentStatus.FINISHED);
                 break;
             }
             if (abort) {
+                tracker.connect("stopped", 0, pieceManager.getBytesDownloaded());
                 LOGGER.info("Aborting download");
                 break;
             }
@@ -100,7 +103,7 @@ public class TorrentClient {
             long current = System.currentTimeMillis() / 1000;
             if (previous == 0 || previous + interval < current) {
                 TrackerResponse response = tracker
-                        .connect(previous == 0,
+                        .connect(previous == 0 ? "started" : "",
                                 pieceManager.getBytesUploaded(),
                                 pieceManager.getBytesDownloaded());
                 if (response.getFailure() == null) {
@@ -115,6 +118,7 @@ public class TorrentClient {
                 TimeUnit.SECONDS.sleep(5);
             }
         }
+        LOGGER.info("Exit client start()");
     }
 
     public void stop() throws Exception {
@@ -122,7 +126,10 @@ public class TorrentClient {
         for (PeerConnection peerConnection : peers) {
             peerConnection.stop();
         }
+        tracker.getTorrent().setTorrentStatus(TorrentStatus.STOPPED);
+        availablePeers.clear();
         pieceManager.close();
+        EXECUTOR_SERVICE.shutdownNow();
     }
 
     public void clearAvailablePeers() {

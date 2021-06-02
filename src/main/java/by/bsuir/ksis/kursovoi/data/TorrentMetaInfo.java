@@ -1,14 +1,20 @@
 package by.bsuir.ksis.kursovoi.data;
 
 import by.bsuir.ksis.kursovoi.Utils;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Random;
 
 /**
  * Parsed info placed in torrent file.
  */
-public class TorrentMetaInfo {
+public class TorrentMetaInfo implements Serializable {
 
     /** Link to the tracker */
     private String announce;
@@ -40,6 +46,8 @@ public class TorrentMetaInfo {
      * precalculated.
      */
     private String infoHash;
+
+    transient private ObjectProperty<TorrentStatus> torrentStatus = new SimpleObjectProperty(TorrentStatus.STOPPED);
 
     public TorrentMetaInfo(String announce, List<String> announceList, String name, List<FileDescription> files, byte[][] pieceHashes, int pieceLength, String infoHash) {
         this.announce = announce;
@@ -127,5 +135,27 @@ public class TorrentMetaInfo {
 
     public long getTotalSize() {
         return files.stream().mapToLong(FileDescription::getLength).sum();
+    }
+
+    public TorrentStatus getTorrentStatus() {
+        return torrentStatus.get();
+    }
+
+    public ObjectProperty<TorrentStatus> torrentStatusProperty() {
+        return torrentStatus;
+    }
+
+    public void setTorrentStatus(TorrentStatus torrentStatus) {
+        this.torrentStatus.set(torrentStatus);
+    }
+
+    private void writeObject(ObjectOutputStream s) throws IOException {
+        s.defaultWriteObject();
+        s.writeObject(torrentStatus.get());
+    }
+
+    private void readObject(ObjectInputStream s) throws IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        torrentStatus = new SimpleObjectProperty<>((TorrentStatus) s.readObject());
     }
 }

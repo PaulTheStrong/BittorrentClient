@@ -1,6 +1,8 @@
 package by.bsuir.ksis.kursovoi.data;
 
-public class FileDescription {
+import java.io.Serializable;
+
+public class FileDescription implements Serializable {
 
     private String path;
     private long length;

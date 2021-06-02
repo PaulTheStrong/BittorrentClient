@@ -1,10 +1,7 @@
 package by.bsuir.ksis.kursovoi.client;
 
 import by.bsuir.ksis.kursovoi.Utils;
-import by.bsuir.ksis.kursovoi.data.Bitfield;
-import by.bsuir.ksis.kursovoi.data.Block;
-import by.bsuir.ksis.kursovoi.data.Piece;
-import by.bsuir.ksis.kursovoi.data.TorrentMetaInfo;
+import by.bsuir.ksis.kursovoi.data.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
@@ -55,6 +52,7 @@ public class PieceManager implements AutoCloseable {
 
 
     private void checkDownloadedPieces() throws IOException {
+        torrent.setTorrentStatus(TorrentStatus.SCANNING);
         File file = new File("H:/downloads/" + torrent.getName());
         if (!file.exists()) {
             LOGGER.info("FILE DOESNT EXIST");
@@ -65,7 +63,7 @@ public class PieceManager implements AutoCloseable {
 
         byte[][] pieceHashes = torrent.getPieceHashes();
         int totalPieces = pieceHashes.length;
-        int READ_PIECES = 32;
+        int READ_PIECES = 8;
         int pieceLength = torrent.getPieceLength();
 
         byte[] buffer = new byte[pieceLength * READ_PIECES];
@@ -117,6 +115,7 @@ public class PieceManager implements AutoCloseable {
         initiatePieces();
         checkDownloadedPieces();
         new Thread(pieceWriter).start();
+        torrent.setTorrentStatus(TorrentStatus.DOWNLOADING);
     }
 
     /** Closes the connection to a referred file. */
@@ -381,5 +380,9 @@ public class PieceManager implements AutoCloseable {
 
     public void addPendingBlockListListener(ListChangeListener<Block> pieceListChangeListener) {
         pendingBlocks.addListener(pieceListChangeListener);
+    }
+
+    public TorrentMetaInfo getTorrent() {
+        return torrent;
     }
 }

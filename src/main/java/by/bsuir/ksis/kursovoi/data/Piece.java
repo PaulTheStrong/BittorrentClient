@@ -4,7 +4,6 @@ import lombok.SneakyThrows;
 import org.apache.log4j.Logger;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static by.bsuir.ksis.kursovoi.Utils.SHAsum;
 
@@ -35,15 +34,15 @@ public class Piece {
 
     /** Reset all blocks to MISSING regardless of current state */
     public void reset() {
-        blocks.forEach(block -> block.setStatus(Block.Status.MISSING));
+        blocks.forEach(block -> block.setStatus(BlockStatus.MISSING));
     }
 
     /** Get the next Block to be requested */
     public Optional<Block> nextRequest() {
         Optional<Block> first = blocks.stream()
-                .filter(block -> block.getStatus() == Block.Status.MISSING)
+                .filter(block -> block.getStatus() == BlockStatus.MISSING)
                 .findFirst();
-        first.ifPresent(block -> block.setStatus(Block.Status.PENDING));
+        first.ifPresent(block -> block.setStatus(BlockStatus.PENDING));
         return first;
     }
 
@@ -57,7 +56,7 @@ public class Piece {
         if (first.isPresent()) {
             Block block = first.get();
             LOGGER.debug("SET RETRIEVED ON BLOCK " + offset);
-            block.setStatus(Block.Status.RETRIEVED);
+            block.setStatus(BlockStatus.RETRIEVED);
             block.setData(data);
         } else {
             LOGGER.warn("Trying to complete a non-existing block " + offset);
@@ -66,7 +65,7 @@ public class Piece {
 
     /** Check if all blocks for the pieces has been retreived. */
     public boolean isComplete() {
-        return blocks.stream().allMatch(block -> block.getStatus() == Block.Status.RETRIEVED);
+        return blocks.stream().allMatch(block -> block.getStatus() == BlockStatus.RETRIEVED);
     }
 
     /** Check if SHA1 hash for all received block match the

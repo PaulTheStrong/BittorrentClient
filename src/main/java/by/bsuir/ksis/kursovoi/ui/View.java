@@ -1,31 +1,19 @@
 package by.bsuir.ksis.kursovoi.ui;
 
-import by.bsuir.ksis.kursovoi.client.PieceManager;
-import by.bsuir.ksis.kursovoi.client.TorrentClient;
-import by.bsuir.ksis.kursovoi.data.Block;
-import by.bsuir.ksis.kursovoi.data.TorrentMetaInfo;
-import by.bsuir.ksis.kursovoi.ui.listeners.PieChartPieceUpdateListener;
-import by.bsuir.ksis.kursovoi.ui.listeners.SpeedMeasureChangeBlockListListener;
-import by.bsuir.ksis.kursovoi.utils.BencoderParser;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.chart.LineChart;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.PieChart;
-import javafx.scene.chart.XYChart;
-import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class View extends Application {
 
+    private MainPaneController controller;
+
     @Override
     public void start(Stage stage) throws Exception {
-        GridPane root = new GridPane();
+       /* GridPane root = new GridPane();
         Scene scene = new Scene(root);
         stage.setTitle("Torrent stats");
         stage.setWidth(1200);
@@ -76,7 +64,21 @@ public class View extends Application {
         root.add(lineChart, 0, 1);
         lineChart.getData().add(series);
 
-        new Thread(client::start).start();
+        new Thread(client::start).start();*/
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/MainPane.fxml"));
+        Pane pane = loader.load();
+        Scene scene = new Scene(pane);
+        controller = loader.getController();
+        controller.initController(stage);
+        stage.setScene(scene);
+        stage.show();
+        controller.startClients();
+    }
+
+    @Override
+    public void stop() throws Exception {
+        controller.close();
+        Platform.exit();
     }
 
     public static void main(String[] args) {

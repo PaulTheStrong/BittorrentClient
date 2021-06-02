@@ -42,6 +42,7 @@ import static by.bsuir.ksis.kursovoi.Utils.byteArray2Hex;
 public class PeerConnection {
 
     private static final Logger LOGGER = Logger.getRootLogger();
+    public static final int PIECES_PER_REQUEST = 50;
 
     /** The async Queue containing available peers */
     private final BlockingQueue<Peer> availablePeers;
@@ -74,12 +75,15 @@ public class PeerConnection {
     @SneakyThrows
     public void start() {
         while (!myState.contains(ConnectionState.STOPPED)) {
-            Peer peer = availablePeers.take();
+            Peer peer = availablePeers.poll();
+            if (peer == null) {
+                Thread.sleep(10000);
+                continue;
+            }
             String ip = peer.getIp();
             int port = peer.getPort();
             LOGGER.info("Got peer " + ip + ":" + port);
             try (Socket socket = new Socket(ip, port)){
-
                 LOGGER.info("Connected to the peer " + ip + ":" + port);
                 peerInputStream = new PeerInputStream(socket.getInputStream());
                 peerOutputStream = new PeerOutputStream(socket.getOutputStream());
@@ -93,6 +97,8 @@ public class PeerConnection {
                 sendInterested();
                 myState.add(ConnectionState.INTERESTED);
                 int requestedBlocks = 0;
+                PeerMessage unchokeMessage = new UnchokeMessage();
+                peerOutputStream.writeMessage(unchokeMessage);
 
                 while (!myState.contains(ConnectionState.STOPPED)) {
                     PeerMessage message = peerInputStream.readNextMessage();
@@ -123,7 +129,7 @@ public class PeerConnection {
                         case KEEPALIVE:
                             break;
                         case PIECE:
-                            if (--requestedBlocks == 0) {
+                            if (--requestedBlocks == 1) {
                                 myState.remove(ConnectionState.PENDING_REQUEST);
                             }
                             PieceMessage pieceMessage = (PieceMessage) message;
@@ -144,7 +150,7 @@ public class PeerConnection {
                         if (myState.contains(ConnectionState.INTERESTED)) {
                             if (!myState.contains(ConnectionState.PENDING_REQUEST)) {
                                 myState.add(ConnectionState.PENDING_REQUEST);
-                                for (int i = 0; i < 50; i++) {
+                                for (int i = 0; i < PIECES_PER_REQUEST; i++) {
                                     if (!requestPiece()) {
                                         break;
                                     } else {
@@ -166,19 +172,20 @@ public class PeerConnection {
                 //stop();
             }
         }
+        LOGGER.info("Exit peerConnection.start()");
     }
 
     /** Sends the cancel message to the remote peer and closes the
      * connection. */
     public void cancel() {
         LOGGER.info("Closing connection with peer " + remoteId);
-
     }
 
     /** Stop this connection from the current peer (if a connection exist) and
      from connecting to any new peer. */
-    public void stop() {
+    public synchronized void stop() {
         myState.add(ConnectionState.STOPPED);
+
     }
 
     public boolean requestPiece() throws IOException {

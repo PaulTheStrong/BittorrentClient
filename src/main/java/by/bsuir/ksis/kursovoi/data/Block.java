@@ -10,15 +10,11 @@ package by.bsuir.ksis.kursovoi.data;
  */
 public class Block {
 
-    public enum Status {
-        MISSING, PENDING, RETRIEVED
-    }
-
     private int piece;
     private int offset;
     private int length;
 
-    private Status status;
+    private BlockStatus blockStatus;
     private byte[] data;
 
     private long addedTime;
@@ -27,7 +23,7 @@ public class Block {
         this.piece = piece;
         this.offset = offset;
         this.length = length;
-        this.status = Status.MISSING;
+        this.blockStatus = BlockStatus.MISSING;
         this.addedTime = System.currentTimeMillis();
     }
 
@@ -55,12 +51,12 @@ public class Block {
         this.length = length;
     }
 
-    public Status getStatus() {
-        return status;
+    public BlockStatus getStatus() {
+        return blockStatus;
     }
 
-    public void setStatus(Status status) {
-        this.status = status;
+    public void setStatus(BlockStatus blockStatus) {
+        this.blockStatus = blockStatus;
     }
 
     public byte[] getData() {
@@ -85,7 +81,7 @@ public class Block {
                 "piece=" + piece +
                 ", offset=" + offset +
                 ", length=" + length +
-                ", status=" + status +
+                ", status=" + blockStatus +
                 '}';
     }
 }
